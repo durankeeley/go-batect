@@ -1,0 +1,46 @@
+containers:
+  terraform:
+    image: hashicorp/terraform:latest
+    volumes:
+      - local: .
+        container: /code
+    working_directory: /code
+
+  tfsec:
+    image: aquasec/tfsec-alpine:latest
+    volumes:
+      - local: .
+        container: /code
+    working_directory: /code
+
+tasks:
+  build:
+    description: '"Builds" the Terraform code, confirming the syntax is valid'
+    run:
+      container: terraform
+      command: fmt -recursive /code
+
+  format:
+    description: Format all Terraform code
+    run:
+      container: terraform
+      command: fmt -recursive /code
+  
+  check-format:
+    description: Check formatting issues of Terraform code
+    run:
+      container: terraform
+      command: fmt -recursive -check -diff /code
+
+  security-scan:
+    description: Runs 'tfsec' security scanner
+    run:
+      container: tfsec
+      command: --config-file tfsec.yml /code
+  
+  check-all:
+    description: Runs all the code checks
+    prerequisites:
+      - build
+      - check-format
+      - security-scan
