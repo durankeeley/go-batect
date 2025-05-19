@@ -34,6 +34,7 @@ type Task struct {
 	Shell             bool   `yaml:"shell"`
 	ShellExecutable   string `yaml:"shell_executable"`
 	DockerCompose     bool   `yaml:"docker_compose"`
+	DockerComposeDown bool   `yaml:"docker_compose_down"`
 	DockerComposeFile string `yaml:"docker_compose_file"`
 	Run               struct {
 		Container string `yaml:"container"`
@@ -131,10 +132,20 @@ func runTask(config *Config, name string) error {
 		return fmt.Errorf("task '%s' not found", name)
 	}
 
+	hasRun := task.Run.Container != ""
+
+	if !hasRun {
+		log.Printf("🔧 Running task: %s", name)
+	}
+
 	for _, prereq := range task.Prerequisites {
 		if err := runTask(config, prereq); err != nil {
 			return fmt.Errorf("failed prerequisite '%s': %w", prereq, err)
 		}
+	}
+
+	if hasRun {
+		log.Printf("🔧 Running task: %s", name)
 	}
 
 	if task.DockerCompose {
@@ -147,12 +158,14 @@ func runTask(config *Config, name string) error {
 			return fmt.Errorf("docker compose up failed: %w", err)
 		}
 
-		defer func() {
-			downCmd := exec.Command("docker", "compose", "-f", task.DockerComposeFile, "down")
-			downCmd.Stdout = os.Stdout
-			downCmd.Stderr = os.Stderr
-			_ = downCmd.Run()
-		}()
+		if task.DockerComposeDown {
+			defer func() {
+				downCmd := exec.Command("docker", "compose", "-f", task.DockerComposeFile, "down")
+				downCmd.Stdout = os.Stdout
+				downCmd.Stderr = os.Stderr
+				_ = downCmd.Run()
+			}()
+		}
 
 		execArgs := []string{"exec", task.Run.Container}
 		if task.Shell {
@@ -180,7 +193,7 @@ func runTask(config *Config, name string) error {
 
 	run := task.Run
 	container, ok := config.Containers[run.Container]
-	if !ok {
+	if !ok && len(task.Prerequisites) == 0 && run.Container == "" {
 		return fmt.Errorf("container '%s' not found for task '%s'", run.Container, name)
 	}
 
@@ -197,7 +210,6 @@ func runTask(config *Config, name string) error {
 		}
 	}
 
-	log.Printf("🔧 Running task: %s", name)
 	args := []string{"run", "--rm"}
 
 	for _, vol := range container.Volumes {
@@ -229,15 +241,21 @@ func runTask(config *Config, name string) error {
 		args = append(args, strings.Fields(run.Command)...)
 	}
 
-	log.Printf("🚀 docker %s", strings.Join(args, " "))
+	if len(task.Prerequisites) == 0 && task.Run.Container == "" {
+		return fmt.Errorf("task '%s' has no prerequisites or run command defined", name)
+	}
 
-	cmd := exec.Command("docker", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
+	if task.Run.Container != "" {
+		log.Printf("🚀 docker %s", strings.Join(args, " "))
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("error running task '%s': %w", name, err)
+		cmd := exec.Command("docker", args...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("error running task '%s': %w", name, err)
+		}
 	}
 
 	return nil
