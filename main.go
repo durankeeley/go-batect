@@ -30,18 +30,20 @@ type Volume struct {
 }
 
 type Task struct {
-	Description   string   `yaml:"description,omitempty"`
-	Prerequisites []string `yaml:"prerequisites,omitempty"`
-	Run           *Run     `yaml:"run,omitempty"`
-	DockerCompose bool     `yaml:"docker_compose,omitempty"`
+	Description     string `yaml:"description"`
+	Shell           bool   `yaml:"shell"`
+	ShellExecutable string `yaml:"shell_executable"`
+	Run             struct {
+		Container string `yaml:"container"`
+		Command   string `yaml:"command"`
+	} `yaml:"run"`
+	Prerequisites []string `yaml:"prerequisites"`
 }
 
 type Run struct {
 	Container string `yaml:"container"`
 	Command   string `yaml:"command"`
 }
-
-var visited = map[string]bool{}
 
 func main() {
 	var configPath string
@@ -121,43 +123,26 @@ func listTasks(cfg *Config) {
 	}
 }
 
-func runTask(cfg *Config, name string) error {
-	if visited[name] {
-		return nil
-	}
-
-	task := cfg.Tasks[name]
-
-	for _, pre := range task.Prerequisites {
-		if err := runTask(cfg, pre); err != nil {
-			return err
-		}
-	}
-
-	if task.DockerCompose {
-		fmt.Println("⚙️  Running docker compose...")
-		if err := exec.Command("docker", "compose", "up", "-d").Run(); err != nil {
-			return fmt.Errorf("docker compose up failed: %w", err)
-		}
-		defer exec.Command("docker", "compose", "down").Run()
-	}
-
-	if task.Run != nil {
-		fmt.Printf("🔧 Running task: %s\n", name)
-		return runCommand(cfg, task.Run)
-	}
-
-	visited[name] = true
-	return nil
-}
-
-func runCommand(cfg *Config, run *Run) error {
-	container, ok := cfg.Containers[run.Container]
+func runTask(config *Config, name string) error {
+	task, ok := config.Tasks[name]
 	if !ok {
-		return fmt.Errorf("container '%s' not defined", run.Container)
+		return fmt.Errorf("task '%s' not found", name)
+	}
+
+	for _, prereq := range task.Prerequisites {
+		if err := runTask(config, prereq); err != nil {
+			return fmt.Errorf("failed prerequisite '%s': %w", prereq, err)
+		}
+	}
+
+	run := task.Run
+	container, ok := config.Containers[run.Container]
+	if !ok {
+		return fmt.Errorf("container '%s' not found for task '%s'", run.Container, name)
 	}
 
 	image := container.Image
+
 	if container.Build != "" {
 		image = "go-batect_" + run.Container
 		buildCmd := exec.Command("docker", "build", "-t", image, container.Build)
@@ -169,11 +154,13 @@ func runCommand(cfg *Config, run *Run) error {
 		}
 	}
 
+	log.Printf("🔧 Running task: %s", name)
 	args := []string{"run", "--rm"}
+
 	for _, vol := range container.Volumes {
 		absLocal, err := filepath.Abs(vol.Local)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid volume path '%s': %w", vol.Local, err)
 		}
 		args = append(args, "-v", fmt.Sprintf("%s:%s", absLocal, vol.Container))
 	}
@@ -182,14 +169,33 @@ func runCommand(cfg *Config, run *Run) error {
 		args = append(args, "-w", container.WorkingDirectory)
 	}
 
+	useShell := task.Shell
+	if useShell {
+		shell := task.ShellExecutable
+		if shell == "" {
+			shell = "sh"
+		}
+		args = append(args, "--entrypoint", shell)
+	}
+
 	args = append(args, image)
-	args = append(args, strings.Fields(run.Command)...)
+
+	if useShell {
+		args = append(args, "-c", run.Command)
+	} else {
+		args = append(args, strings.Fields(run.Command)...)
+	}
+
+	log.Printf("🚀 docker %s", strings.Join(args, " "))
 
 	cmd := exec.Command("docker", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
-	fmt.Printf("🚀 docker %s\n", strings.Join(args, " "))
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error running task '%s': %w", name, err)
+	}
+
+	return nil
 }

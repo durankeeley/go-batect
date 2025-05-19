@@ -7,7 +7,35 @@ containers:
     working_directory: /code
 
   tfsec:
-    image: aquasec/tfsec-alpine:latest
+    image: aquasec/trivy:latest
+    volumes:
+      - local: .
+        container: /code
+    working_directory: /code
+
+  bash:
+    image: bash:latest
+    volumes:
+      - local: .
+        container: /code
+    working_directory: /code
+
+  git:
+    image: alpine/git:latest
+    volumes:
+      - local: .
+        container: /code
+    working_directory: /code
+
+  golang:
+    image: golang:latest
+    volumes:
+      - local: .
+        container: /code
+    working_directory: /code
+
+  golang2:
+    build: ./docker
     volumes:
       - local: .
         container: /code
@@ -36,7 +64,7 @@ tasks:
     description: Runs 'tfsec' security scanner
     run:
       container: tfsec
-      command: --config-file tfsec.yml /code
+      command: config /code
   
   check-all:
     description: Runs all the code checks
@@ -44,3 +72,35 @@ tasks:
       - build
       - check-format
       - security-scan
+
+  list-all-files:
+    description: Lists all the files
+    run:
+      container: bash
+      command: ls 
+
+  new-branch:
+    description: Creates a new branch
+    shell: true
+    shell_executable: sh
+    run:
+      container: git
+      command: git config --global --add safe.directory /code && git switch -c "new_branch"
+
+  build-golang:
+    description: Builds the binaries from this Go project
+    shell: true
+    shell_executable: sh
+    run:
+      container: golang
+      command: env GOOS=windows GOARCH=amd64 go build -o "go-batect.exe" -buildvcs=false && env GOOS=linux GOARCH=amd64 go build -o "go-batect" -buildvcs=false
+      # command: go build -o "go-batect" -buildvcs=false
+
+  build-golang2:
+    description: Builds the Go application
+    shell: true
+    shell_executable: sh
+    run:
+      container: golang2
+      command: env GOOS=windows GOARCH=amd64 go build -o "go-batect.exe" -buildvcs=false && env GOOS=linux GOARCH=amd64 go build -o "go-batect" -buildvcs=false
+      # command: ls
