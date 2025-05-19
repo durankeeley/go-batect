@@ -104,3 +104,15 @@ tasks:
       container: golang2
       command: env GOOS=windows GOARCH=amd64 go build -o "go-batect.exe" -buildvcs=false && env GOOS=linux GOARCH=amd64 go build -o "go-batect" -buildvcs=false
       # command: ls
+
+  app:
+    description: "Run app using Docker Compose"
+    docker_compose: true
+    docker_compose_file: node-docker-compose.yml
+    shell: true
+    shell_executable: "sh"
+    run:
+      container: nodeapp
+      command: npm run dev
+      # command: ls
+      # command: npm init -y

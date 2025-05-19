@@ -30,10 +30,12 @@ type Volume struct {
 }
 
 type Task struct {
-	Description     string `yaml:"description"`
-	Shell           bool   `yaml:"shell"`
-	ShellExecutable string `yaml:"shell_executable"`
-	Run             struct {
+	Description       string `yaml:"description"`
+	Shell             bool   `yaml:"shell"`
+	ShellExecutable   string `yaml:"shell_executable"`
+	DockerCompose     bool   `yaml:"docker_compose"`
+	DockerComposeFile string `yaml:"docker_compose_file"`
+	Run               struct {
 		Container string `yaml:"container"`
 		Command   string `yaml:"command"`
 	} `yaml:"run"`
@@ -133,6 +135,47 @@ func runTask(config *Config, name string) error {
 		if err := runTask(config, prereq); err != nil {
 			return fmt.Errorf("failed prerequisite '%s': %w", prereq, err)
 		}
+	}
+
+	if task.DockerCompose {
+		fmt.Println("⚙️  Running docker-compose...")
+
+		upCmd := exec.Command("docker", "compose", "-f", task.DockerComposeFile, "up", "-d")
+		upCmd.Stdout = os.Stdout
+		upCmd.Stderr = os.Stderr
+		if err := upCmd.Run(); err != nil {
+			return fmt.Errorf("docker compose up failed: %w", err)
+		}
+
+		defer func() {
+			downCmd := exec.Command("docker", "compose", "-f", task.DockerComposeFile, "down")
+			downCmd.Stdout = os.Stdout
+			downCmd.Stderr = os.Stderr
+			_ = downCmd.Run()
+		}()
+
+		execArgs := []string{"exec", task.Run.Container}
+		if task.Shell {
+			shell := task.ShellExecutable
+			if shell == "" {
+				shell = "sh"
+			}
+			execArgs = append(execArgs, shell, "-c", task.Run.Command)
+		} else {
+			execArgs = append(execArgs, strings.Fields(task.Run.Command)...)
+		}
+
+		fmt.Printf("🚀 docker compose %s\n", strings.Join(execArgs, " "))
+		execCmd := exec.Command("docker", append([]string{"compose", "-f", task.DockerComposeFile}, execArgs...)...)
+		execCmd.Stdout = os.Stdout
+		execCmd.Stderr = os.Stderr
+		execCmd.Stdin = os.Stdin
+
+		if err := execCmd.Run(); err != nil {
+			return fmt.Errorf("error running task '%s': %w", name, err)
+		}
+
+		return nil
 	}
 
 	run := task.Run
