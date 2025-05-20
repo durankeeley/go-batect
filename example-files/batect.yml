@@ -47,12 +47,6 @@ tasks:
     run:
       container: terraform
       command: validate
-
-  format:
-    description: Format all Terraform code
-    run:
-      container: terraform
-      command: fmt -recursive /code
   
   check-format:
     description: Check formatting issues of Terraform code
@@ -79,14 +73,6 @@ tasks:
       container: bash
       command: ls 
 
-  new-branch:
-    description: Creates a new branch
-    shell: true
-    shell_executable: sh
-    run:
-      container: git
-      command: git config --global --add safe.directory /code && git switch -c "new_branch"
-
   build-golang:
     description: Builds the binaries from this Go project
     shell: true
@@ -94,7 +80,6 @@ tasks:
     run:
       container: golang
       command: env GOOS=windows GOARCH=amd64 go build -o "go-batect.exe" -buildvcs=false && env GOOS=linux GOARCH=amd64 go build -o "go-batect" -buildvcs=false
-      # command: go build -o "go-batect" -buildvcs=false
 
   build-golang2:
     description: Builds the Go application
@@ -103,7 +88,6 @@ tasks:
     run:
       container: golang2
       command: env GOOS=windows GOARCH=amd64 go build -o "go-batect.exe" -buildvcs=false && env GOOS=linux GOARCH=amd64 go build -o "go-batect" -buildvcs=false
-      # command: ls
 
   app:
     description: "Run app using Docker Compose"
@@ -114,5 +98,14 @@ tasks:
     run:
       container: nodeapp
       command: npm run dev
-      # command: ls
-      # command: npm init -y
+
+  app2:
+    description: "Run app using Docker Compose"
+    docker_compose: true
+    docker_compose_file: node-docker-compose.yml
+    docker_compose_down: true # destroys after task is run
+    shell: true
+    shell_executable: "sh"
+    run:
+      container: nodeapp
+      command: npm run dev
