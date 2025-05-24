@@ -19,6 +19,11 @@ containers:
       - local: .
         container: /code
     working_directory: /code
+    healthcheck:
+      command: "ls /code || exit 1"
+      interval: 5s
+      timeout: 2s
+      retries: 3
 
   git:
     image: alpine/git:latest
@@ -33,6 +38,8 @@ containers:
       - local: .
         container: /code
     working_directory: /code
+    healthcheck:
+      command: "go version || exit 1"
 
   golang2:
     build: ./docker

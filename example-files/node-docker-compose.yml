@@ -1,6 +1,6 @@
 services:
   nodeapp:
-    image: node:20
+    image: node:latest
     ports:
       - "3000:3000"
     volumes:
@@ -9,3 +9,9 @@ services:
     command: sh -c "npm install && npm start"
     environment:
       - NODE_ENV=development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 2s
+      timeout: 1s
+      retries: 3
+      start_period: 2s

@@ -1,0 +1,35 @@
+containers:
+  golang:
+    build: ./docker-test
+    volumes:
+      - local: .
+        container: /app
+      - local: /var/run/docker.sock
+        container: /var/run/docker.sock
+    working_directory: /app
+
+tasks:
+  test:
+    description: "Runs the Gherkin tests using go test"
+    run:
+      container: golang
+      command: go test -v .
+
+  compile:
+    description: "Compiles go-batect for Linux and Windows (ARM64 and x86_64)"
+    prerequisites:
+      - test
+    shell: true
+    run:
+      container: golang
+      command: |
+        mkdir -p binaries
+        echo "Building Linux x86_64..."
+        GOOS=linux GOARCH=amd64 go build -o binaries/go-batect_linux_x86_64 -buildvcs=false
+        echo "Building Linux ARM64..."
+        GOOS=linux GOARCH=arm64 go build -o binaries/go-batect_linux_arm64 -buildvcs=false
+        echo "Building Windows x86_64..."
+        GOOS=windows GOARCH=amd64 go build -o binaries/go-batect_windows_x86_64.exe -buildvcs=false
+        echo "Building Windows ARM64..."
+        GOOS=windows GOARCH=arm64 go build -o binaries/go-batect_windows_arm64.exe -buildvcs=false
+        echo "Binaries available in binaries/ folder."
