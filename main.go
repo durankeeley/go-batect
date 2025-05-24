@@ -60,7 +60,7 @@ func main() {
 				configPath = args[i+1]
 				i++
 			} else {
-				fmt.Println("Missing path after --file/-f")
+				fmt.Println("❗ Missing path after --file/-f")
 				os.Exit(1)
 			}
 		default:
@@ -70,11 +70,11 @@ func main() {
 
 	config, err := loadConfigWithFallback(configPath, []string{"config.yml", "batect.yml"})
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+		log.Fatalf("❗ Failed to load config: %v", err)
 	}
 
 	if taskArg == "" {
-		fmt.Println("Usage: mybatect [--file|-f <path>] <task-name>|--list")
+		fmt.Println("❗ No task given. Usage: go-batect [--file|-f <path>] <task-name>")
 		os.Exit(1)
 	}
 
@@ -84,11 +84,11 @@ func main() {
 	}
 
 	if _, ok := config.Tasks[taskArg]; !ok {
-		log.Fatalf("Task '%s' not found", taskArg)
+		log.Fatalf("❗ Task '%s' not found", taskArg)
 	}
 
 	if err := runTask(config, taskArg); err != nil {
-		log.Fatalf("Error running task '%s': %v", taskArg, err)
+		log.Fatalf("❗ Error running task '%s': %v", taskArg, err)
 	}
 }
 
@@ -107,7 +107,7 @@ func loadConfigWithFallback(explicit string, fallbacks []string) (*Config, error
 		if _, err := os.Stat(explicit); err == nil {
 			return loadConfig(explicit)
 		}
-		return nil, fmt.Errorf("specified config file '%s' not found", explicit)
+		return nil, fmt.Errorf("❗ specified config file '%s' not found", explicit)
 	}
 
 	for _, path := range fallbacks {
@@ -116,7 +116,7 @@ func loadConfigWithFallback(explicit string, fallbacks []string) (*Config, error
 		}
 	}
 
-	return nil, fmt.Errorf("no config file found (tried %v)", fallbacks)
+	return nil, fmt.Errorf("❗ no config file found (tried %v)", fallbacks)
 }
 
 func listTasks(cfg *Config) {
@@ -129,7 +129,7 @@ func listTasks(cfg *Config) {
 func runTask(config *Config, name string) error {
 	task, ok := config.Tasks[name]
 	if !ok {
-		return fmt.Errorf("task '%s' not found", name)
+		return fmt.Errorf("❗ task '%s' not found", name)
 	}
 
 	hasRun := task.Run.Container != ""
@@ -140,7 +140,7 @@ func runTask(config *Config, name string) error {
 
 	for _, prereq := range task.Prerequisites {
 		if err := runTask(config, prereq); err != nil {
-			return fmt.Errorf("failed prerequisite '%s': %w", prereq, err)
+			return fmt.Errorf("❗ failed prerequisite '%s': %w", prereq, err)
 		}
 	}
 
@@ -149,13 +149,13 @@ func runTask(config *Config, name string) error {
 	}
 
 	if task.DockerCompose {
-		fmt.Println("⚙️  Running docker-compose...")
+		fmt.Println("⚙️ Running docker-compose...")
 
 		upCmd := exec.Command("docker", "compose", "-f", task.DockerComposeFile, "up", "-d")
 		upCmd.Stdout = os.Stdout
 		upCmd.Stderr = os.Stderr
 		if err := upCmd.Run(); err != nil {
-			return fmt.Errorf("docker compose up failed: %w", err)
+			return fmt.Errorf("❗ docker compose up failed: %w", err)
 		}
 
 		if task.DockerComposeDown {
@@ -185,7 +185,7 @@ func runTask(config *Config, name string) error {
 		execCmd.Stdin = os.Stdin
 
 		if err := execCmd.Run(); err != nil {
-			return fmt.Errorf("error running task '%s': %w", name, err)
+			return fmt.Errorf("❗ error running task '%s': %w", name, err)
 		}
 
 		return nil
@@ -194,7 +194,7 @@ func runTask(config *Config, name string) error {
 	run := task.Run
 	container, ok := config.Containers[run.Container]
 	if !ok && len(task.Prerequisites) == 0 && run.Container == "" {
-		return fmt.Errorf("container '%s' not found for task '%s'", run.Container, name)
+		return fmt.Errorf("❗ container '%s' not found for task '%s'", run.Container, name)
 	}
 
 	image := container.Image
@@ -206,7 +206,7 @@ func runTask(config *Config, name string) error {
 		buildCmd.Stderr = os.Stderr
 		fmt.Printf("🏗️  Building image '%s'...\n", image)
 		if err := buildCmd.Run(); err != nil {
-			return fmt.Errorf("docker build failed: %w", err)
+			return fmt.Errorf("❗ docker build failed: %w", err)
 		}
 	}
 
@@ -215,7 +215,7 @@ func runTask(config *Config, name string) error {
 	for _, vol := range container.Volumes {
 		absLocal, err := filepath.Abs(vol.Local)
 		if err != nil {
-			return fmt.Errorf("invalid volume path '%s': %w", vol.Local, err)
+			return fmt.Errorf("❗ invalid volume path '%s': %w", vol.Local, err)
 		}
 		args = append(args, "-v", fmt.Sprintf("%s:%s", absLocal, vol.Container))
 	}
@@ -242,7 +242,7 @@ func runTask(config *Config, name string) error {
 	}
 
 	if len(task.Prerequisites) == 0 && task.Run.Container == "" {
-		return fmt.Errorf("task '%s' has no prerequisites or run command defined", name)
+		return fmt.Errorf("❗ task '%s' has no prerequisites or run command defined", name)
 	}
 
 	if task.Run.Container != "" {
@@ -254,7 +254,7 @@ func runTask(config *Config, name string) error {
 		cmd.Stdin = os.Stdin
 
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("error running task '%s': %w", name, err)
+			return fmt.Errorf("❗ error running task '%s': %w", name, err)
 		}
 	}
 
